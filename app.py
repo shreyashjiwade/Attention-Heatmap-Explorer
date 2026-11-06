@@ -265,4 +265,49 @@ elif section == "Image Attention using ViT":
 # ==========================================
 elif section == "Bias Testing":
     st.subheader("Pronoun-to-Occupation Attention Comparison")
-    st.write("This is a small exploratory comparison,
+    st.write("This is a small exploratory comparison, not a definitive measure of model bias.")
+    examples = [
+        "The doctor told the nurse that she should help the patient.",
+        "The doctor told the nurse that he should help the patient."
+    ]
+    if st.button("🚀 Run Bias Test", type="primary"):
+        with st.spinner("Analyzing bias..."):
+            tokenizer, model = load_bert()
+            values = []
+            details = []
+            with torch.no_grad():
+                for sentence in examples:
+                    encoded = tokenizer(sentence, return_tensors="pt").to(DEVICE)
+                    output = model(**encoded)
+                    tokens = tokenizer.convert_ids_to_tokens(encoded["input_ids"][0].cpu().tolist())
+                    attention = output.attentions[-1][0].mean(dim=0).cpu().numpy()
+                    pronoun_indices = [i for i, token in enumerate(tokens) if token.lower() in ["she", "he"]]
+                    occupation_indices = [i for i, token in enumerate(tokens) if token.lower() in ["doctor", "nurse"]]
+                    if pronoun_indices and occupation_indices:
+                        score = float(attention[pronoun_indices[0], occupation_indices].mean())
+                    else:
+                        score = 0.0
+                    values.append(score)
+                    details.append((sentence, score, tokens))
+            
+            fig, ax = plt.subplots(figsize=(8, 4))
+            fig.patch.set_alpha(0.0)
+            ax.patch.set_alpha(0.0)
+            
+            ax.bar(["Sentence 1 (she)", "Sentence 2 (he)"], values, color=['#818CF8', '#38BDF8'])
+            ax.set_title("Pronoun-to-Occupation Attention Comparison", color="white")
+            ax.set_ylabel("Attention Weight", color="#94A3B8")
+            ax.tick_params(colors="#CBD5E1")
+            
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['left'].set_color('#475569')
+            ax.spines['bottom'].set_color('#475569')
+            
+            fig.tight_layout()
+            st.pyplot(fig)
+            
+            st.dataframe([{"Sentence": d[0], "Pronoun-to-occupation attention": round(d[1], 6)} for d in details], use_container_width=True)
+            st.info("Attention weights alone do not establish bias, explain a model's full reasoning, or prove a causal relationship. A larger and carefully designed evaluation is needed.")
+
+st.sidebar.caption(f"Running on: {DEVICE}")
