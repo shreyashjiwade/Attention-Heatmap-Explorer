@@ -101,9 +101,9 @@ def plot_attention(attention, tokens, title):
     return fig
 
 def token_representation_scores(hidden_state, tokens):
-    values = hidden_state[0].norm(dim=-1).detach().cpu().numpy()
-    values = values / (values.sum() + 1e-12)
-    return values, tokens
+    scores = hidden_state[0].norm(dim=-1).detach().cpu().numpy()
+    scores = scores / (scores.sum() + 1e-12)
+    return scores, tokens
 
 # ==========================================
 # 4. SIDEBAR & MAIN NAVIGATION
@@ -178,61 +178,61 @@ if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch
                 st.session_state["hidden"] = final_hidden.detach().cpu()
                 st.session_state["model_choice"] = model_choice
 
-                # --- Section 1: Text Attention Heatmap ---
-                if section == "Text Attention Heatmap":
-                    fig = plot_attention(final_attention, tokens, f"{model_choice} Attention Heatmap")
-                    st.pyplot(fig)
-                    st.download_button("Download Text Heatmap as PNG", data=_figure_png(fig), file_name=f"{model_choice.lower()}_attention_heatmap.png", mime="image/png")
+            # --- Section 1: Text Attention Heatmap ---
+            if section == "Text Attention Heatmap":
+                fig = plot_attention(final_attention, tokens, f"{model_choice} Attention Heatmap")
+                st.pyplot(fig)
+                st.download_button("Download Text Heatmap as PNG", data=_figure_png(fig), file_name=f"{model_choice.lower()}_attention_heatmap.png", mime="image/png")
+            
+            # --- Section 2: Token Representation Scores ---
+            elif section == "Token Representation Scores":
+                scores, token_list = token_representation_scores(final_hidden, tokens)
+                st.subheader("Token Representation Scores")
+                st.dataframe([{"Token": t, "Representation Score": round(float(s), 4)} for t, s in zip(token_list, scores)], use_container_width=True)
+                st.caption("These scores are representation proxies, not true next-token probabilities.")
                 
-                # --- Section 2: Token Representation Scores ---
-                elif section == "Token Representation Scores":
-                    scores, token_list = token_representation_scores(final_hidden, tokens)
-                    st.subheader("Token Representation Scores")
-                    st.dataframe([{"Token": t, "Representation Score": round(float(s), 4)} for t, s in zip(token_list, scores)], use_container_width=True)
-                    st.caption("These scores are representation proxies, not true next-token probabilities.")
-                    
-                    fig, ax = plt.subplots(figsize=(10, 4))
-                    fig.patch.set_alpha(0.0)
-                    ax.patch.set_alpha(0.0)
-                    bg_matrix = final_attention[0].mean(dim=0).detach().cpu().numpy()
-                    n = len(token_list)
-                    bg_matrix = bg_matrix[:n, :n]
-                    
-                    ax.imshow(bg_matrix, cmap='YlGnBu', aspect='auto', zorder=1, alpha=0.3, interpolation='bicubic')
-                    ax.bar(token_list, scores, color='#008080', zorder=2, edgecolor='#004C4C', linewidth=1)
-                    
-                    ax.spines['top'].set_visible(False)
-                    ax.spines['right'].set_visible(False)
-                    ax.spines['left'].set_color('#8C8C8C')
-                    ax.spines['bottom'].set_color('#8C8C8C')
-                    ax.grid(axis='y', linestyle='--', alpha=0.5, zorder=0, color='#CCCCCC')
-                    
-                    ax.set_ylabel("Representation Score", color="#333333", fontsize=10)
-                    ax.tick_params(axis="x", rotation=45, colors="#1A1A1A")
-                    ax.tick_params(axis="y", colors="#1A1A1A")
-                    fig.tight_layout()
-                    st.pyplot(fig)
+                fig, ax = plt.subplots(figsize=(10, 4))
+                fig.patch.set_alpha(0.0)
+                ax.patch.set_alpha(0.0)
+                bg_matrix = final_attention[0].mean(dim=0).detach().cpu().numpy()
+                n = len(token_list)
+                bg_matrix = bg_matrix[:n, :n]
                 
-                # --- Section 3: PyTorch Hooks ---
-                elif section == "PyTorch Hooks":
-                    captured = {}
-                    def save_output(module, inputs, output):
-                        captured["value"] = output[0] if isinstance(output, tuple) else output
+                ax.imshow(bg_matrix, cmap='YlGnBu', aspect='auto', zorder=1, alpha=0.3, interpolation='bicubic')
+                ax.bar(token_list, scores, color='#008080', zorder=2, edgecolor='#004C4C', linewidth=1)
+                
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+                ax.spines['left'].set_color('#8C8C8C')
+                ax.spines['bottom'].set_color('#8C8C8C')
+                ax.grid(axis='y', linestyle='--', alpha=0.5, zorder=0, color='#CCCCCC')
+                
+                ax.set_ylabel("Representation Score", color="#333333", fontsize=10)
+                ax.tick_params(axis="x", rotation=45, colors="#1A1A1A")
+                ax.tick_params(axis="y", colors="#1A1A1A")
+                fig.tight_layout()
+                st.pyplot(fig)
+            
+            # --- Section 3: PyTorch Hooks ---
+            elif section == "PyTorch Hooks":
+                captured = {}
+                def save_output(module, inputs, output):
+                    captured["value"] = output[0] if isinstance(output, tuple) else output
 
-                    handle = hook_layer.register_forward_hook(save_output)
-                    try:
-                        with torch.no_grad():
-                            _ = model(**encoded)
-                    finally:
-                        handle.remove()
+                handle = hook_layer.register_forward_hook(save_output)
+                try:
+                    with torch.no_grad():
+                        _ = model(**encoded)
+                finally:
+                    handle.remove()
 
-                    if "value" in captured:
-                        tensor = captured["value"].detach().cpu()
-                        st.success("PyTorch Hook captured layer output successfully!")
-                        st.write("Captured Layer Output Shape:", tuple(tensor.shape))
-                        st.dataframe(tensor[0, :10, :10].numpy(), use_container_width=True)
-                    else:
-                        st.error("The hook did not capture an output.")
+                if "value" in captured:
+                    tensor = captured["value"].detach().cpu()
+                    st.success("PyTorch Hook captured layer output successfully!")
+                    st.write("Captured Layer Output Shape:", tuple(tensor.shape))
+                    st.dataframe(tensor[0, :10, :10].numpy(), use_container_width=True)
+                else:
+                    st.error("The hook did not capture an output.")
 
 elif section == "Image Attention using ViT":
     col1, col2 = st.columns([1, 2])
