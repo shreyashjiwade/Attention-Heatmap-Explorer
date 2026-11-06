@@ -10,6 +10,9 @@ from transformers import (
     ViTImageProcessor, ViTModel
 )
 
+# Dark style for charts to match the new Matte Slate background
+plt.style.use('dark_background')
+
 # ==========================================
 # PAGE CONFIGURATION 
 # ==========================================
@@ -20,29 +23,29 @@ st.set_page_config(
 )
 
 # ==========================================
-# FAINT & CLEAN MINIMALIST CSS
+# PREMIUM MATTE SLATE CSS (Not White, Not Black)
 # ==========================================
 st.markdown("""
 <style>
-    /* Ultra Faint / Clean Minimalist Background */
+    /* Professional Matte Slate Background */
     .stApp {
-        background-color: #FCFCFD;
-        color: #111827;
+        background-color: #1E293B;
+        color: #F8FAFC;
     }
-    /* Faint Sidebar */
+    /* Darker Sidebar for contrast */
     [data-testid="stSidebar"] {
-        background-color: #F3F4F6;
-        border-right: 1px solid #E5E7EB;
+        background-color: #0F172A;
+        border-right: 1px solid #334155;
     }
     /* Transparent header */
     [data-testid="stHeader"] {
         background-color: rgba(0,0,0,0);
     }
-    /* Clean white text input */
+    /* Clean text input */
     .stTextArea textarea {
-        background-color: #FFFFFF !important;
-        color: #111827 !important;
-        border: 1px solid #D1D5DB !important;
+        background-color: #334155 !important;
+        color: #F8FAFC !important;
+        border: 1px solid #475569 !important;
         border-radius: 8px;
     }
 </style>
@@ -83,18 +86,16 @@ def plot_attention(attention, tokens, title):
     n = min(len(tokens), matrix.shape[0], 32)
     fig, ax = plt.subplots(figsize=(max(7, n * 0.55), max(5, n * 0.45)))
     
-    # Transparent plot background
     fig.patch.set_alpha(0.0)
     ax.patch.set_alpha(0.0)
     
     sns.heatmap(matrix[:n, :n], xticklabels=tokens[:n], yticklabels=tokens[:n], cmap="viridis", ax=ax)
     
-    # Dark text for faint theme
-    ax.set_title(title, color="#111827", pad=15, fontweight='bold')
-    ax.set_xlabel("Key Tokens", color="#4B5563")
-    ax.set_ylabel("Query Tokens", color="#4B5563")
-    plt.xticks(rotation=45, ha="right", color="#374151")
-    plt.yticks(rotation=0, color="#374151")
+    ax.set_title(title, color="#F8FAFC", pad=15, fontweight='bold')
+    ax.set_xlabel("Key Tokens", color="#94A3B8")
+    ax.set_ylabel("Query Tokens", color="#94A3B8")
+    plt.xticks(rotation=45, ha="right", color="#CBD5E1")
+    plt.yticks(rotation=0, color="#CBD5E1")
     fig.tight_layout()
     return fig
 
@@ -119,14 +120,14 @@ section = st.sidebar.radio(
 )
 
 # ==========================================
-# MAIN PAGE UI (Simple & Clean Title)
+# MAIN PAGE UI
 # ==========================================
 st.markdown("""
     <div style='text-align: center; padding: 2rem 0 2rem 0;'>
-        <h1 style='font-size: 3.5rem; font-weight: 800; color: #2563EB; margin-bottom: 0.5rem;'>
+        <h1 style='font-size: 3.5rem; font-weight: 800; color: #38BDF8; margin-bottom: 0.5rem;'>
             Attention Heatmap Explorer
         </h1>
-        <p style='font-size: 1.2rem; color: #6B7280; font-weight: 500; max-width: 800px; margin: 0 auto; line-height: 1.6;'>
+        <p style='font-size: 1.2rem; color: #94A3B8; font-weight: 500; max-width: 800px; margin: 0 auto; line-height: 1.6;'>
             Explore transformer attention for text and images, inspect token representation scores, and test simple pronoun–occupation examples.
         </p>
     </div>
@@ -197,21 +198,18 @@ if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch
                     n = len(token_list)
                     bg_matrix = bg_matrix[:n, :n]
                     
-                    # Faint Heatmap background behind bars
-                    ax.imshow(bg_matrix, cmap='YlGnBu', aspect='auto', zorder=1, alpha=0.3, interpolation='bicubic')
-                    
-                    # Nice solid blue bars
-                    ax.bar(token_list, scores, color='#3B82F6', zorder=2, edgecolor='#2563EB', linewidth=1)
+                    ax.imshow(bg_matrix, cmap='magma', aspect='auto', zorder=1, alpha=0.4, interpolation='bicubic')
+                    ax.bar(token_list, scores, color='#38BDF8', zorder=2, edgecolor='#BAE6FD', linewidth=1)
                     
                     ax.spines['top'].set_visible(False)
                     ax.spines['right'].set_visible(False)
-                    ax.spines['left'].set_color('#D1D5DB')
-                    ax.spines['bottom'].set_color('#D1D5DB')
-                    ax.grid(axis='y', linestyle='--', alpha=0.5, zorder=0, color='#E5E7EB')
+                    ax.spines['left'].set_color('#475569')
+                    ax.spines['bottom'].set_color('#475569')
+                    ax.grid(axis='y', linestyle='--', alpha=0.3, zorder=0, color='#64748B')
                     
-                    ax.set_ylabel("Representation Score", color="#4B5563", fontsize=10)
-                    ax.tick_params(axis="x", rotation=45, colors="#374151")
-                    ax.tick_params(axis="y", colors="#374151")
+                    ax.set_ylabel("Representation Score", color="#94A3B8", fontsize=10)
+                    ax.tick_params(axis="x", rotation=45, colors="#CBD5E1")
+                    ax.tick_params(axis="y", colors="#CBD5E1")
                     fig.tight_layout()
                     st.pyplot(fig)
                 
@@ -261,7 +259,10 @@ elif section == "Image Attention using ViT":
                     side = int(np.sqrt(len(cls_attention)))
                     grid = cls_attention[:side * side].reshape(side, side)
                     grid = (grid - grid.min()) / (grid.max() - grid.min() + 1e-12)
+                    
+                    # Correct syntax for image resize
                     resized = Image.fromarray(np.uint8(grid * 255)).resize(image.size)
+                    
                     heat = np.array(resized) / 255.0
                     
                     fig, ax = plt.subplots(figsize=(8, 6))
@@ -269,8 +270,8 @@ elif section == "Image Attention using ViT":
                     ax.patch.set_alpha(0.0)
                     
                     ax.imshow(image)
-                    ax.imshow(heat, cmap="jet", alpha=0.45)
-                    ax.set_title("ViT Image Attention Heatmap", color="#111827", fontweight='bold')
+                    ax.imshow(heat, cmap="magma", alpha=0.45)
+                    ax.set_title("ViT Image Attention Heatmap", color="#F8FAFC", fontweight='bold')
                     ax.axis("off")
                     fig.tight_layout()
                     
@@ -311,15 +312,15 @@ elif section == "Bias Testing":
             fig.patch.set_alpha(0.0)
             ax.patch.set_alpha(0.0)
             
-            ax.bar(["Sentence 1 (she)", "Sentence 2 (he)"], values, color=['#8B5CF6', '#3B82F6'])
-            ax.set_title("Pronoun-to-Occupation Attention Comparison", color="#111827", fontweight='bold')
-            ax.set_ylabel("Attention Weight", color="#4B5563")
-            ax.tick_params(colors="#374151")
+            ax.bar(["Sentence 1 (she)", "Sentence 2 (he)"], values, color=['#818CF8', '#38BDF8'])
+            ax.set_title("Pronoun-to-Occupation Attention Comparison", color="#F8FAFC", fontweight='bold')
+            ax.set_ylabel("Attention Weight", color="#94A3B8")
+            ax.tick_params(colors="#CBD5E1")
             
             ax.spines['top'].set_visible(False)
             ax.spines['right'].set_visible(False)
-            ax.spines['left'].set_color('#D1D5DB')
-            ax.spines['bottom'].set_color('#D1D5DB')
+            ax.spines['left'].set_color('#475569')
+            ax.spines['bottom'].set_color('#475569')
             
             fig.tight_layout()
             st.pyplot(fig)
