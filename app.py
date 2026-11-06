@@ -244,37 +244,25 @@ elif section == "Image Attention using ViT":
                     side = int(np.sqrt(len(cls_attention)))
                     grid = cls_attention[:side * side].reshape(side, side)
                     grid = (grid - grid.min()) / (grid.max() - grid.min() + 1e-12)
-                    resized = Image.fromarray(np.uint8(grid
-# ==========================================
-# MAIN PAGE UI (ATTRACTIVE HEADER)
-# ==========================================
-st.markdown("""
-    <div style='text-align: center; padding: 2rem 0 2rem 0;'>
-        <h1 style='font-size: 3.5rem; font-weight: 800; background: -webkit-linear-gradient(45deg, #FF4B4B, #6B46C1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.5rem;'>
-            Attention Heatmap Explorer
-        </h1>
-        <p style='font-size: 1.2rem; color: #475569; font-weight: 400; max-width: 800px; margin: 0 auto; line-height: 1.6;'>
-            Explore transformer attention for text and images, inspect token representation scores, and test simple pronoun–occupation examples.
-        </p>
-    </div>
-""", unsafe_allow_html=True)
-st.write("---")
+                    resized = Image.fromarray(np.uint8(grid * 255)).resize(image.size)
+                    heat = np.array(resized) / 255.0
+                    
+                    fig, ax = plt.subplots(figsize=(8, 6))
+                    fig.patch.set_alpha(0.0)
+                    ax.patch.set_alpha(0.0)
+                    
+                    ax.imshow(image)
+                    ax.imshow(heat, cmap="magma", alpha=0.45)
+                    ax.set_title("ViT Image Attention Heatmap", color="white")
+                    ax.axis("off")
+                    fig.tight_layout()
+                    
+                    st.pyplot(fig)
+                    st.download_button("Download Image Heatmap as PNG", data=_figure_png(fig), file_name="vit_image_attention_heatmap.png", mime="image/png")
 
 # ==========================================
-# TEXT / TOKEN / HOOKS SECTIONS
+# BIAS TESTING SECTION
 # ==========================================
-if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch Hooks"]:
-    model_choice = st.sidebar.selectbox("Select Transformer Model", ["BERT", "GPT-2"])
-    
-    col1, col2 = st.columns([4, 1])
-    
-    with col1:
-        default_text = "The doctor told the nurse that she should help the patient."
-        text_input = st.text_area("✍️ Enter a sentence", default_text)
-
-    with col2:
-        st.write("") 
-        st.write("")
-        generate_btn = st.button("🚀 Generate", type="primary", use_container_width=True)
-
-    if generate_btn:
+elif section == "Bias Testing":
+    st.subheader("Pronoun-to-Occupation Attention Comparison")
+    st.write("This is a small exploratory comparison,
