@@ -15,7 +15,7 @@ from transformers import (
 # ==========================================
 st.set_page_config(
     page_title="Attention Heatmap Explorer", 
-    page_icon="🔍",
+    page_icon="✨",
     layout="wide"
 )
 
@@ -95,11 +95,19 @@ section = st.sidebar.radio(
 )
 
 # ==========================================
-# MAIN PAGE UI
+# MAIN PAGE UI (PREMIUM ATTRACTIVE HEADER)
 # ==========================================
-st.markdown("<h1 style='text-align: center; color: #2C3E50;'>🔍 Attention Heatmap Explorer</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #7F8C8D;'>Explore transformer attention for text and images, inspect token representation scores, and test simple pronoun–occupation examples.</p>", unsafe_allow_html=True)
-st.divider()
+st.markdown("""
+    <div style='text-align: center; padding: 2rem 0 2rem 0;'>
+        <h1 style='font-size: 3.5rem; font-weight: 800; background: -webkit-linear-gradient(45deg, #FF4B4B, #7353BA); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.5rem;'>
+            Attention Heatmap Explorer
+        </h1>
+        <p style='font-size: 1.2rem; color: #555555; font-weight: 400; max-width: 800px; margin: 0 auto; line-height: 1.6;'>
+            Explore transformer attention for text and images, inspect token representation scores, and test simple pronoun–occupation examples.
+        </p>
+    </div>
+""", unsafe_allow_html=True)
+st.write("---")
 
 # ==========================================
 # TEXT / TOKEN / HOOKS SECTIONS
@@ -107,7 +115,7 @@ st.divider()
 if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch Hooks"]:
     model_choice = st.sidebar.selectbox("Select Transformer Model", ["BERT", "GPT-2"])
     
-    st.info("💡 Tip: Try testing different pronouns to observe gender bias in the model.")
+    # ⚠️ Blue tip line kadhun takli ahe!
 
     col1, col2 = st.columns([4, 1])
     
