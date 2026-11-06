@@ -10,43 +10,44 @@ from transformers import (
     ViTImageProcessor, ViTModel
 )
 
-# Dark style for charts to match the new Charcoal background
-plt.style.use('dark_background')
-
 # ==========================================
 # PAGE CONFIGURATION 
 # ==========================================
 st.set_page_config(
     page_title="Attention Heatmap Explorer", 
-    page_icon="✨",
+    page_icon="🔍",
     layout="wide"
 )
 
 # ==========================================
-# PREMIUM CHARCOAL GRAY CSS (No Blue, No White)
+# SAFE & 100% READABLE CREAM/WARM GRAY CSS
 # ==========================================
 st.markdown("""
 <style>
-    /* Professional Matte Charcoal Gray Background */
+    /* Soft Cream / Warm Gray Background - 100% Readable */
     .stApp {
-        background-color: #18181B;
-        color: #F4F4F5;
+        background-color: #F4F4F0;
+        color: #1A1A1A !important;
     }
-    /* Slightly lighter sidebar */
+    /* Slightly darker sidebar for separation */
     [data-testid="stSidebar"] {
-        background-color: #27272A;
-        border-right: 1px solid #3F3F46;
+        background-color: #EAE8E3;
+        border-right: 1px solid #D1CDC4;
     }
     /* Transparent header */
     [data-testid="stHeader"] {
         background-color: rgba(0,0,0,0);
     }
-    /* Clean text input */
+    /* White input box with black text for maximum clarity */
     .stTextArea textarea {
-        background-color: #27272A !important;
-        color: #F4F4F5 !important;
-        border: 1px solid #52525B !important;
-        border-radius: 8px;
+        background-color: #FFFFFF !important;
+        color: #000000 !important;
+        border: 1px solid #B0A89A !important;
+        border-radius: 6px;
+    }
+    /* Make sure all normal text is dark */
+    p, h1, h2, h3, h4, h5, h6, span, label, div {
+        color: #1A1A1A;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -91,11 +92,11 @@ def plot_attention(attention, tokens, title):
     
     sns.heatmap(matrix[:n, :n], xticklabels=tokens[:n], yticklabels=tokens[:n], cmap="viridis", ax=ax)
     
-    ax.set_title(title, color="#F4F4F5", pad=15, fontweight='bold')
-    ax.set_xlabel("Key Tokens", color="#A1A1AA")
-    ax.set_ylabel("Query Tokens", color="#A1A1AA")
-    plt.xticks(rotation=45, ha="right", color="#E4E4E7")
-    plt.yticks(rotation=0, color="#E4E4E7")
+    ax.set_title(title, color="#1A1A1A", pad=15, fontweight='bold')
+    ax.set_xlabel("Key Tokens", color="#333333")
+    ax.set_ylabel("Query Tokens", color="#333333")
+    plt.xticks(rotation=45, ha="right", color="#1A1A1A")
+    plt.yticks(rotation=0, color="#1A1A1A")
     fig.tight_layout()
     return fig
 
@@ -124,10 +125,10 @@ section = st.sidebar.radio(
 # ==========================================
 st.markdown("""
     <div style='text-align: center; padding: 2rem 0 2rem 0;'>
-        <h1 style='font-size: 3.5rem; font-weight: 800; color: #10B981; margin-bottom: 0.5rem;'>
+        <h1 style='font-size: 3.5rem; font-weight: 800; color: #B22222; margin-bottom: 0.5rem;'>
             Attention Heatmap Explorer
         </h1>
-        <p style='font-size: 1.2rem; color: #A1A1AA; font-weight: 500; max-width: 800px; margin: 0 auto; line-height: 1.6;'>
+        <p style='font-size: 1.2rem; color: #4D4D4D; font-weight: 500; max-width: 800px; margin: 0 auto; line-height: 1.6;'>
             Explore transformer attention for text and images, inspect token representation scores, and test simple pronoun–occupation examples.
         </p>
     </div>
@@ -198,18 +199,18 @@ if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch
                     n = len(token_list)
                     bg_matrix = bg_matrix[:n, :n]
                     
-                    ax.imshow(bg_matrix, cmap='magma', aspect='auto', zorder=1, alpha=0.4, interpolation='bicubic')
-                    ax.bar(token_list, scores, color='#10B981', zorder=2, edgecolor='#34D399', linewidth=1)
+                    ax.imshow(bg_matrix, cmap='YlGnBu', aspect='auto', zorder=1, alpha=0.3, interpolation='bicubic')
+                    ax.bar(token_list, scores, color='#008080', zorder=2, edgecolor='#004C4C', linewidth=1)
                     
                     ax.spines['top'].set_visible(False)
                     ax.spines['right'].set_visible(False)
-                    ax.spines['left'].set_color('#71717A')
-                    ax.spines['bottom'].set_color('#71717A')
-                    ax.grid(axis='y', linestyle='--', alpha=0.3, zorder=0, color='#52525B')
+                    ax.spines['left'].set_color('#8C8C8C')
+                    ax.spines['bottom'].set_color('#8C8C8C')
+                    ax.grid(axis='y', linestyle='--', alpha=0.5, zorder=0, color='#CCCCCC')
                     
-                    ax.set_ylabel("Representation Score", color="#A1A1AA", fontsize=10)
-                    ax.tick_params(axis="x", rotation=45, colors="#E4E4E7")
-                    ax.tick_params(axis="y", colors="#E4E4E7")
+                    ax.set_ylabel("Representation Score", color="#333333", fontsize=10)
+                    ax.tick_params(axis="x", rotation=45, colors="#1A1A1A")
+                    ax.tick_params(axis="y", colors="#1A1A1A")
                     fig.tight_layout()
                     st.pyplot(fig)
                 
@@ -268,8 +269,8 @@ elif section == "Image Attention using ViT":
                     ax.patch.set_alpha(0.0)
                     
                     ax.imshow(image)
-                    ax.imshow(heat, cmap="magma", alpha=0.45)
-                    ax.set_title("ViT Image Attention Heatmap", color="#F4F4F5", fontweight='bold')
+                    ax.imshow(heat, cmap="jet", alpha=0.45)
+                    ax.set_title("ViT Image Attention Heatmap", color="#1A1A1A", fontweight='bold')
                     ax.axis("off")
                     fig.tight_layout()
                     
@@ -310,20 +311,11 @@ elif section == "Bias Testing":
             fig.patch.set_alpha(0.0)
             ax.patch.set_alpha(0.0)
             
-            ax.bar(["Sentence 1 (she)", "Sentence 2 (he)"], values, color=['#F59E0B', '#10B981'])
-            ax.set_title("Pronoun-to-Occupation Attention Comparison", color="#F4F4F5", fontweight='bold')
-            ax.set_ylabel("Attention Weight", color="#A1A1AA")
-            ax.tick_params(colors="#E4E4E7")
+            ax.bar(["Sentence 1 (she)", "Sentence 2 (he)"], values, color=['#B22222', '#008080'])
+            ax.set_title("Pronoun-to-Occupation Attention Comparison", color="#1A1A1A", fontweight='bold')
+            ax.set_ylabel("Attention Weight", color="#333333")
+            ax.tick_params(colors="#1A1A1A")
             
             ax.spines['top'].set_visible(False)
             ax.spines['right'].set_visible(False)
-            ax.spines['left'].set_color('#71717A')
-            ax.spines['bottom'].set_color('#71717A')
-            
-            fig.tight_layout()
-            st.pyplot(fig)
-            
-            st.dataframe([{"Sentence": d[0], "Pronoun-to-occupation attention": round(d[1], 6)} for d in details], use_container_width=True)
-            st.info("Attention weights alone do not establish bias, explain a model's full reasoning, or prove a causal relationship. A larger and carefully designed evaluation is needed.")
-
-st.sidebar.caption(f"Running on: {DEVICE}")
+            ax.spines['left'].set
