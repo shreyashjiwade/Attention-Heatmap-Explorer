@@ -10,13 +10,20 @@ from transformers import (
     ViTImageProcessor, ViTModel
 )
 
-st.set_page_config(page_title="Attention Heatmap Explorer", layout="wide")
-st.title("Attention Heatmap Explorer")
-st.write("Explore transformer attention for text and images, inspect token representation scores, and test simple pronoun–occupation examples.")
+# ==========================================
+# PAGE CONFIGURATION 
+# ==========================================
+st.set_page_config(
+    page_title="Attention Heatmap Explorer", 
+    page_icon="🔍",
+    layout="wide"
+)
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
+# ==========================================
+# CACHED FUNCTIONS
+# ==========================================
 @st.cache_resource
 def load_bert():
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
@@ -24,7 +31,6 @@ def load_bert():
         "bert-base-uncased", output_attentions=True, output_hidden_states=True
     ).to(DEVICE).eval()
     return tokenizer, model
-
 
 @st.cache_resource
 def load_gpt2():
@@ -34,7 +40,6 @@ def load_gpt2():
     ).to(DEVICE).eval()
     return tokenizer, model
 
-
 @st.cache_resource
 def load_vit():
     processor = ViTImageProcessor.from_pretrained("google/vit-base-patch16-224")
@@ -43,14 +48,12 @@ def load_vit():
     ).to(DEVICE).eval()
     return processor, model
 
-
 def _figure_png(fig):
     import io
     buffer = io.BytesIO()
     fig.savefig(buffer, format="png", bbox_inches="tight", dpi=160)
     buffer.seek(0)
     return buffer.getvalue()
-
 
 def plot_attention(attention, tokens, title):
     # Average attention across heads from the final transformer layer.
@@ -72,14 +75,15 @@ def plot_attention(attention, tokens, title):
     fig.tight_layout()
     return fig
 
-
 def token_representation_scores(hidden_state, tokens):
     # These are normalized representation magnitudes, not probability values.
     values = hidden_state[0].norm(dim=-1).detach().cpu().numpy()
     values = values / (values.sum() + 1e-12)
     return values, tokens
 
-
+# ==========================================
+# SIDEBAR UI
+# ==========================================
 st.sidebar.header("Explorer")
 section = st.sidebar.radio(
     "Choose a section",
@@ -92,12 +96,34 @@ section = st.sidebar.radio(
     ]
 )
 
+# ==========================================
+# MAIN PAGE UI (HEADER & DESIGN)
+# ==========================================
+st.markdown("<h1 style='text-align: center; color: #2C3E50;'>🔍 Attention Heatmap Explorer</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #7F8C8D;'>Explore transformer attention for text and images, inspect token representation scores, and test simple pronoun–occupation examples.</p>", unsafe_allow_html=True)
+st.divider()
+
+# ==========================================
+# TEXT / TOKEN / HOOKS SECTIONS
+# ==========================================
 if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch Hooks"]:
     model_choice = st.sidebar.selectbox("Select Transformer Model", ["BERT", "GPT-2"])
-    default_text = "The doctor told the nurse that she should help the patient."
-    text_input = st.text_area("Enter a sentence", default_text)
+    
+    st.info("💡 Tip: Try testing different pronouns to observe gender bias in the model.")
 
-    if st.button("Generate", type="primary"):
+    # Using Columns for better layout
+    col1, col2 = st.columns([4, 1])
+    
+    with col1:
+        default_text = "The doctor told the nurse that she should help the patient."
+        text_input = st.text_area("✍️ Enter a sentence", default_text)
+
+    with col2:
+        st.write("") # Spacing to align button with text area
+        st.write("")
+        generate_btn = st.button("🚀 Generate", type="primary", use_container_width=True)
+
+    if generate_btn:
         if not text_input.strip():
             st.warning("Please enter a sentence.")
         else:
@@ -136,6 +162,7 @@ if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch
                 st.session_state["hidden"] = final_hidden.detach().cpu()
                 st.session_state["model_choice"] = model_choice
 
+                # --- 1. Text Attention Heatmap ---
                 if section == "Text Attention Heatmap":
                     fig = plot_attention(final_attention, tokens, f"{model_choice} Attention Heatmap")
                     st.pyplot(fig)
@@ -145,22 +172,40 @@ if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch
                         file_name=f"{model_choice.lower()}_attention_heatmap.png",
                         mime="image/png"
                     )
+                
+                # --- 2. Token Representation Scores (WITH Z-ORDER DESIGN FIX) ---
                 elif section == "Token Representation Scores":
                     scores, token_list = token_representation_scores(final_hidden, tokens)
                     st.subheader("Token Representation Scores")
+                    
                     st.dataframe(
                         [{"Token": t, "Representation Score": round(float(s), 4)}
                          for t, s in zip(token_list, scores)],
                         use_container_width=True
                     )
                     st.caption("These scores are representation proxies, not true next-token probabilities.")
+                    
+                    # Plotting Bar Chart with Background Heatmap
                     fig, ax = plt.subplots(figsize=(10, 4))
-                    ax.bar(token_list, scores)
+                    
+                    # Extract background attention matrix
+                    bg_matrix = final_attention[0].mean(dim=0).detach().cpu().numpy()
+                    n = len(token_list)
+                    bg_matrix = bg_matrix[:n, :n]
+                    
+                    # ⚠️ ZORDER=1 puts the colorful heatmap in the background
+                    ax.imshow(bg_matrix, cmap='jet', aspect='auto', zorder=1, alpha=0.5)
+                    
+                    # ⚠️ ZORDER=2 puts the bars in the foreground
+                    ax.bar(token_list, scores, color='#0055ff', zorder=2)
+                    
                     ax.set_ylabel("Normalized representation magnitude")
                     ax.set_xlabel("Tokens")
                     ax.tick_params(axis="x", rotation=45)
                     fig.tight_layout()
                     st.pyplot(fig)
+                
+                # --- 3. PyTorch Hooks ---
                 else:
                     captured = {}
                     def save_output(module, inputs, output):
@@ -185,86 +230,100 @@ if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch
                     else:
                         st.error("The hook did not capture an output.")
 
+# ==========================================
+# ViT IMAGE SECTION
+# ==========================================
+elif section == "Image Attention using ViT":
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        uploaded = st.file_uploader("Upload an image", type=["png", "jpg", "jpeg"])
+        if uploaded is not None:
+            image = Image.open(uploaded).convert("RGB")
+            st.image(image, caption="Uploaded image", use_container_width=True)
+            
+    with col2:
+        if uploaded is not None:
+            if st.button("🚀 Generate Image Attention Heatmap", type="primary", use_container_width=True):
+                with st.spinner("Generating ViT attention..."):
+                    processor, model = load_vit()
+                    inputs = processor(images=image, return_tensors="pt").to(DEVICE)
+                    with torch.no_grad():
+                        output = model(**inputs)
+                    
+                    attn = output.attentions[-1][0].mean(dim=0)
+                    cls_attention = attn[0, 1:].detach().cpu().numpy()
+                    side = int(np.sqrt(len(cls_attention)))
+                    grid = cls_attention[:side * side].reshape(side, side)
+                    grid = (grid - grid.min()) / (grid.max() - grid.min() + 1e-12)
+                    resized = Image.fromarray(np.uint8(grid * 255)).resize(image.size)
+                    heat = np.array(resized) / 255.0
+                    
+                    fig, ax = plt.subplots(figsize=(8, 6))
+                    ax.imshow(image)
+                    ax.imshow(heat, cmap="jet", alpha=0.45)
+                    ax.set_title("ViT Image Attention Heatmap")
+                    ax.axis("off")
+                    fig.tight_layout()
+                    
+                    st.pyplot(fig)
+                    st.download_button(
+                        "Download Image Heatmap as PNG",
+                        data=_figure_png(fig),
+                        file_name="vit_image_attention_heatmap.png",
+                        mime="image/png"
+                    )
 
-if section == "Image Attention using ViT":
-    uploaded = st.file_uploader("Upload an image", type=["png", "jpg", "jpeg"])
-    if uploaded is not None:
-        image = Image.open(uploaded).convert("RGB")
-        st.image(image, caption="Uploaded image", width=350)
-        if st.button("Generate Image Attention Heatmap", type="primary"):
-            with st.spinner("Generating ViT attention..."):
-                processor, model = load_vit()
-                inputs = processor(images=image, return_tensors="pt").to(DEVICE)
-                with torch.no_grad():
-                    output = model(**inputs)
-                # CLS token attention to image patches from final layer, averaged over heads.
-                attn = output.attentions[-1][0].mean(dim=0)
-                cls_attention = attn[0, 1:].detach().cpu().numpy()
-                side = int(np.sqrt(len(cls_attention)))
-                grid = cls_attention[:side * side].reshape(side, side)
-                grid = (grid - grid.min()) / (grid.max() - grid.min() + 1e-12)
-                resized = Image.fromarray(np.uint8(grid * 255)).resize(image.size)
-                heat = np.array(resized) / 255.0
-                fig, ax = plt.subplots(figsize=(8, 6))
-                ax.imshow(image)
-                ax.imshow(heat, cmap="jet", alpha=0.45)
-                ax.set_title("ViT Image Attention Heatmap")
-                ax.axis("off")
-                fig.tight_layout()
-                st.pyplot(fig)
-                st.download_button(
-                    "Download Image Heatmap as PNG",
-                    data=_figure_png(fig),
-                    file_name="vit_image_attention_heatmap.png",
-                    mime="image/png"
-                )
-
-
-if section == "Bias Testing":
+# ==========================================
+# BIAS TESTING SECTION
+# ==========================================
+elif section == "Bias Testing":
     st.subheader("Pronoun-to-Occupation Attention Comparison")
     st.write("This is a small exploratory comparison, not a definitive measure of model bias.")
     examples = [
         "The doctor told the nurse that she should help the patient.",
         "The doctor told the nurse that he should help the patient."
     ]
-    if st.button("Run Bias Test", type="primary"):
-        tokenizer, model = load_bert()
-        values = []
-        details = []
-        with torch.no_grad():
-            for sentence in examples:
-                encoded = tokenizer(sentence, return_tensors="pt").to(DEVICE)
-                output = model(**encoded)
-                tokens = tokenizer.convert_ids_to_tokens(encoded["input_ids"][0].cpu().tolist())
-                attention = output.attentions[-1][0].mean(dim=0).cpu().numpy()
-                pronoun_indices = [
-                    i for i, token in enumerate(tokens)
-                    if token.lower() in ["she", "he"]
-                ]
-                occupation_indices = [
-                    i for i, token in enumerate(tokens)
-                    if token.lower() in ["doctor", "nurse"]
-                ]
-                if pronoun_indices and occupation_indices:
-                    score = float(attention[pronoun_indices[0], occupation_indices].mean())
-                else:
-                    score = 0.0
-                values.append(score)
-                details.append((sentence, score, tokens))
-        fig, ax = plt.subplots(figsize=(8, 4))
-        ax.bar(["Sentence 1 (she)", "Sentence 2 (he)"], values)
-        ax.set_title("Pronoun-to-Occupation Attention Comparison")
-        ax.set_ylabel("Attention Weight")
-        fig.tight_layout()
-        st.pyplot(fig)
-        st.dataframe(
-            [{"Sentence": d[0], "Pronoun-to-occupation attention": round(d[1], 6)}
-             for d in details],
-            use_container_width=True
-        )
-        st.info(
-            "Attention weights alone do not establish bias, explain a model's full reasoning, "
-            "or prove a causal relationship. A larger and carefully designed evaluation is needed."
-        )
+    if st.button("🚀 Run Bias Test", type="primary"):
+        with st.spinner("Analyzing bias..."):
+            tokenizer, model = load_bert()
+            values = []
+            details = []
+            with torch.no_grad():
+                for sentence in examples:
+                    encoded = tokenizer(sentence, return_tensors="pt").to(DEVICE)
+                    output = model(**encoded)
+                    tokens = tokenizer.convert_ids_to_tokens(encoded["input_ids"][0].cpu().tolist())
+                    attention = output.attentions[-1][0].mean(dim=0).cpu().numpy()
+                    pronoun_indices = [
+                        i for i, token in enumerate(tokens)
+                        if token.lower() in ["she", "he"]
+                    ]
+                    occupation_indices = [
+                        i for i, token in enumerate(tokens)
+                        if token.lower() in ["doctor", "nurse"]
+                    ]
+                    if pronoun_indices and occupation_indices:
+                        score = float(attention[pronoun_indices[0], occupation_indices].mean())
+                    else:
+                        score = 0.0
+                    values.append(score)
+                    details.append((sentence, score, tokens))
+            
+            fig, ax = plt.subplots(figsize=(8, 4))
+            ax.bar(["Sentence 1 (she)", "Sentence 2 (he)"], values, color=['#FF4B4B', '#0055ff'])
+            ax.set_title("Pronoun-to-Occupation Attention Comparison")
+            ax.set_ylabel("Attention Weight")
+            fig.tight_layout()
+            st.pyplot(fig)
+            
+            st.dataframe(
+                [{"Sentence": d[0], "Pronoun-to-occupation attention": round(d[1], 6)}
+                 for d in details],
+                use_container_width=True
+            )
+            st.info(
+                "Attention weights alone do not establish bias, explain a model's full reasoning, "
+                "or prove a causal relationship. A larger and carefully designed evaluation is needed."
+            )
 
 st.sidebar.caption(f"Running on: {DEVICE}")
