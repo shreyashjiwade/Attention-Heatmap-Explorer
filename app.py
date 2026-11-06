@@ -1,132 +1,62 @@
-import streamlit as st
-import torch
-import torch.nn.functional as F
-from transformers import AutoModel, AutoTokenizer, ViTImageProcessor, ViTForImageClassification
-from PIL import Image
-import numpy as np
+# ==========================================
+# 1. IMPORTS: Saglyat aadhi library import kara
+# ==========================================
 import matplotlib.pyplot as plt
-import seaborn as sns
-
-# --- Page Configuration ---
-st.set_page_config(
-    page_title="Attention Heatmap Explorer | HW 33",
-    page_icon="🔍",
-    layout="wide"
-)
-
-# --- Custom CSS for Styling ---
-st.markdown("""
-    <style>
-    .main {
-        background-color: #0e1117;
-        color: #ffffff;
-    }
-    .stSidebar {
-        background-color: #161b22;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-# --- Sidebar Configuration ---
-st.sidebar.title("⚙️ Configuration")
-st.sidebar.markdown("### HW 33: Attention Mechanisms")
-model_type = st.sidebar.selectbox(
-    "Choose Model Type",
-    ["BERT (Text)", "GPT-2 (Text)", "Vision Transformer (ViT - Image)"]
-)
-
-st.sidebar.markdown("---")
-st.sidebar.info("Repository: [shreyashjiwade/attention-heatmap-explorer](https://github.com/shreyashjiwade/attention-heatmap-explorer)")
-
-# --- Main App Title ---
-st.title("🔍 Attention Heatmap Explorer (HW 33)")
-st.markdown("A comprehensive Streamlit application to visualize attention weights and token/patch interactions for Transformer models.")
 
 # ==========================================
-# 1. BERT / GPT-2 TEXT EXPLORER
+# 2. DATA: Ithe tumcha swatahcha data taku shakta
 # ==========================================
-if "Text" in model_type:
-    model_name = "bert-base-uncased" if "BERT" in model_type else "gpt2"
-    
-    @st.cache_resource
-    def load_text_model(name):
-        tokenizer = AutoTokenizer.from_pretrained(name)
-        model = AutoModel.from_pretrained(name, output_attentions=True)
-        model.eval()
-        return tokenizer, model
+# Tumche labels (X-axis var kay dakhavaycha te)
+categories = ['Python', 'Java', 'C++', 'JavaScript', 'SQL']
 
-    with st.spinner(f"Loading {model_name} model and tokenizer..."):
-        tokenizer, model = load_text_model(model_name)
-
-    user_input = st.text_area("Enter input text for analysis:", "The quick brown fox jumps over the lazy dog.")
-
-    if st.button("Generate Attention Heatmap"):
-        if user_input.strip() == "":
-            st.warning("Please enter valid text input.")
-        else:
-            inputs = tokenizer(user_input, return_tensors="pt")
-            with torch.no_grad():
-                outputs = model(**inputs)
-            
-            attentions = outputs.attentions # Tuple of layers: (batch, heads, seq_len, seq_len)
-            tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
-            
-            st.success("Attention weights computed successfully!")
-            
-            # Layer & Head selection
-            layer_idx = st.slider("Select Layer", 0, len(attentions)-1, len(attentions)-1)
-            layer_attention = attentions[layer_idx][0].mean(dim=0).cpu().numpy() # Average across heads
-            
-            # Plot Heatmap
-            fig, ax = plt.subplots(figsize=(10, 8))
-            sns.heatmap(layer_attention, xticklabels=tokens, yticklabels=tokens, cmap="Blues", ax=ax, cbar=True, linewidths=0.5)
-            plt.xticks(rotation=45, ha='right', fontsize=10)
-            plt.yticks(rotation=0, fontsize=10)
-            ax.set_title(f"Attention Heatmap for Layer {layer_idx} ({model_name})", fontsize=12, fontweight='bold')
-            st.pyplot(fig)
+# Tumchya values (Y-axis var numbers/scores)
+values = [85, 70, 65, 80, 75]
 
 # ==========================================
-# 2. VISION TRANSFORMER (ViT) EXPLORER
+# 3. SETUP: Figure aani Axis create kara
 # ==========================================
-else:
-    @st.cache_resource
-    def load_vit_model():
-        processor = ViTImageProcessor.from_pretrained("google/vit-base-patch16-224")
-        model = ViTForImageClassification.from_pretrained("google/vit-base-patch16-224", output_attentions=True)
-        model.eval()
-        return processor, model
+fig, ax = plt.subplots(figsize=(9, 5))
 
-    with st.spinner("Loading Vision Transformer (ViT)..."):
-        processor, model = load_vit_model()
+# ==========================================
+# 4. PLOT: Bar graph banavnya sathi command
+# ==========================================
+bars = ax.bar(categories, values, color='#3498db', edgecolor='#2980b9', width=0.55, linewidth=1.2)
 
-    uploaded_file = st.file_uploader("Upload an image (PNG, JPG, JPEG)", type=["jpg", "jpeg", "png"])
+# ==========================================
+# 5. SPINES (Borders): Tumchi main requirement
+# ==========================================
+# Varchi ani ujeekadchi border kadhun taka
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
 
-    if uploaded_file is not None:
-        image = Image.open(uploaded_file).convert("RGB")
-        st.image(image, caption="Uploaded Image for Analysis", width=350)
+# Davikadchi ani khalchi border set karne (linewidth ani color)
+ax.spines['left'].set(linewidth=1.8, color='#2c3e50')
+ax.spines['bottom'].set(linewidth=1.8, color='#2c3e50')
 
-        if st.button("Generate ViT Attention Map"):
-            inputs = processor(images=image, return_tensors="pt")
-            with torch.no_grad():
-                outputs = model(**inputs)
-            
-            attentions = outputs.attentions # Layers tuple
-            # Get last layer attention map for the [CLS] token across patches
-            cls_attention = attentions[-1][0, :, 0, 1:].mean(dim=0) # Average across heads
-            
-            # Reshape to grid (e.g., 14x14 for patch size 16 on 224x224 image)
-            grid_size = int(np.sqrt(cls_attention.shape[0]))
-            attention_map = cls_attention.reshape(grid_size, grid_size).cpu().numpy()
-            
-            # Normalize map
-            attention_map = (attention_map - attention_map.min()) / (attention_map.max() - attention_map.min())
+# ==========================================
+# 6. LABELS & TITLE: Nav deyne
+# ==========================================
+ax.set_title("Programming Languages Popularity Graph", fontsize=14, fontweight='bold', color='#2c3e50', pad=15)
+ax.set_xlabel("Languages", fontsize=12, fontweight='bold', color='#2c3e50')
+ax.set_ylabel("Popularity Score", fontsize=12, fontweight='bold', color='#2c3e50')
 
-            fig, ax = plt.subplots(figsize=(6, 6))
-            ax.imshow(image.resize((224, 224)))
-            ax.imshow(attention_map, cmap='jet', alpha=0.6, extent=(0, 224, 224, 0))
-            ax.axis('off')
-            ax.set_title("ViT [CLS] Token Attention Overlay", fontsize=12, fontweight='bold')
-            st.pyplot(fig)
-            st.success("ViT Attention overlay generated successfully!")
-    else:
-        st.info("Please upload an image to analyze Vision Transformer attention.")
+# ==========================================
+# 7. GRID & VALUES: Background grid ani numbers
+# ==========================================
+ax.yaxis.grid(True, linestyle='--', alpha=0.6, color='#bdc3c7')
+ax.set_axisbelow(True)
+
+# Pratyek bar var varti value print karnyacha loop
+for bar in bars:
+    height = bar.get_height()
+    ax.annotate(f'{height}',
+                xy=(bar.get_x() + bar.get_width() / 2, height),
+                xytext=(0, 4),  # thode var offset
+                textcoords="offset points",
+                ha='center', va='bottom', fontsize=10, fontweight='bold', color='#2c3e50')
+
+# ==========================================
+# 8. DISPLAY: Layout adjust karun graph dakhavne
+# ==========================================
+plt.tight_layout()
+plt.show()
