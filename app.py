@@ -56,7 +56,6 @@ def _figure_png(fig):
     return buffer.getvalue()
 
 def plot_attention(attention, tokens, title):
-    # Average attention across heads from the final transformer layer.
     matrix = attention[0].mean(dim=0).detach().cpu().numpy()
     n = min(len(tokens), matrix.shape[0], 32)
     fig, ax = plt.subplots(figsize=(max(7, n * 0.55), max(5, n * 0.45)))
@@ -76,7 +75,6 @@ def plot_attention(attention, tokens, title):
     return fig
 
 def token_representation_scores(hidden_state, tokens):
-    # These are normalized representation magnitudes, not probability values.
     values = hidden_state[0].norm(dim=-1).detach().cpu().numpy()
     values = values / (values.sum() + 1e-12)
     return values, tokens
@@ -97,7 +95,7 @@ section = st.sidebar.radio(
 )
 
 # ==========================================
-# MAIN PAGE UI (HEADER & DESIGN)
+# MAIN PAGE UI
 # ==========================================
 st.markdown("<h1 style='text-align: center; color: #2C3E50;'>🔍 Attention Heatmap Explorer</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #7F8C8D;'>Explore transformer attention for text and images, inspect token representation scores, and test simple pronoun–occupation examples.</p>", unsafe_allow_html=True)
@@ -111,7 +109,6 @@ if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch
     
     st.info("💡 Tip: Try testing different pronouns to observe gender bias in the model.")
 
-    # Using Columns for better layout
     col1, col2 = st.columns([4, 1])
     
     with col1:
@@ -119,7 +116,7 @@ if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch
         text_input = st.text_area("✍️ Enter a sentence", default_text)
 
     with col2:
-        st.write("") # Spacing to align button with text area
+        st.write("") 
         st.write("")
         generate_btn = st.button("🚀 Generate", type="primary", use_container_width=True)
 
@@ -159,12 +156,4 @@ if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch
 
                 st.session_state["tokens"] = tokens
                 st.session_state["attention"] = final_attention.detach().cpu()
-                st.session_state["hidden"] = final_hidden.detach().cpu()
-                st.session_state["model_choice"] = model_choice
-
-                # --- 1. Text Attention Heatmap ---
-                if section == "Text Attention Heatmap":
-                    fig = plot_attention(final_attention, tokens, f"{model_choice} Attention Heatmap")
-                    st.pyplot(fig)
-                    st.download_button(
-                        "Download Text Heatmap as
+                st.session_state["hidden"] =
