@@ -1,321 +1,132 @@
 import streamlit as st
 import torch
+import torch.nn.functional as F
+from transformers import AutoModel, AutoTokenizer, ViTImageProcessor, ViTForImageClassification
+from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from PIL import Image
-from transformers import (
-    AutoTokenizer, AutoModel,
-    GPT2Tokenizer, GPT2Model,
-    ViTImageProcessor, ViTModel
-)
 
-# ==========================================
-# PAGE CONFIGURATION 
-# ==========================================
+# --- Page Configuration ---
 st.set_page_config(
-    page_title="Attention Heatmap Explorer", 
+    page_title="Attention Heatmap Explorer | HW 33",
     page_icon="🔍",
     layout="wide"
 )
 
-# ==========================================
-# SAFE & 100% READABLE CREAM/WARM GRAY CSS
-# ==========================================
+# --- Custom CSS for Styling ---
 st.markdown("""
-<style>
-    /* Soft Cream / Warm Gray Background - 100% Readable */
-    .stApp {
-        background-color: #F4F4F0;
-        color: #1A1A1A !important;
+    <style>
+    .main {
+        background-color: #0e1117;
+        color: #ffffff;
     }
-    /* Slightly darker sidebar for separation */
-    [data-testid="stSidebar"] {
-        background-color: #EAE8E3;
-        border-right: 1px solid #D1CDC4;
+    .stSidebar {
+        background-color: #161b22;
     }
-    /* Transparent header */
-    [data-testid="stHeader"] {
-        background-color: rgba(0,0,0,0);
-    }
-    /* White input box with black text for maximum clarity */
-    .stTextArea textarea {
-        background-color: #FFFFFF !important;
-        color: #000000 !important;
-        border: 1px solid #B0A89A !important;
-        border-radius: 6px;
-    }
-    /* Make sure all normal text is dark */
-    p, h1, h2, h3, h4, h5, h6, span, label, div {
-        color: #1A1A1A;
-    }
-</style>
+    </style>
 """, unsafe_allow_html=True)
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# ==========================================
-# CACHED FUNCTIONS
-# ==========================================
-@st.cache_resource
-def load_bert():
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-    model = AutoModel.from_pretrained("bert-base-uncased", output_attentions=True, output_hidden_states=True).to(DEVICE).eval()
-    return tokenizer, model
-
-@st.cache_resource
-def load_gpt2():
-    tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-    model = GPT2Model.from_pretrained("gpt2", output_attentions=True, output_hidden_states=True).to(DEVICE).eval()
-    return tokenizer, model
-
-@st.cache_resource
-def load_vit():
-    processor = ViTImageProcessor.from_pretrained("google/vit-base-patch16-224")
-    model = ViTModel.from_pretrained("google/vit-base-patch16-224", output_attentions=True).to(DEVICE).eval()
-    return processor, model
-
-def _figure_png(fig):
-    import io
-    buffer = io.BytesIO()
-    fig.savefig(buffer, format="png", bbox_inches="tight", dpi=160)
-    buffer.seek(0)
-    return buffer.getvalue()
-
-def plot_attention(attention, tokens, title):
-    matrix = attention[0].mean(dim=0).detach().cpu().numpy()
-    n = min(len(tokens), matrix.shape[0], 32)
-    fig, ax = plt.subplots(figsize=(max(7, n * 0.55), max(5, n * 0.45)))
-    
-    fig.patch.set_alpha(0.0)
-    ax.patch.set_alpha(0.0)
-    
-    sns.heatmap(matrix[:n, :n], xticklabels=tokens[:n], yticklabels=tokens[:n], cmap="viridis", ax=ax)
-    
-    ax.set_title(title, color="#1A1A1A", pad=15, fontweight='bold')
-    ax.set_xlabel("Key Tokens", color="#333333")
-    ax.set_ylabel("Query Tokens", color="#333333")
-    plt.xticks(rotation=45, ha="right", color="#1A1A1A")
-    plt.yticks(rotation=0, color="#1A1A1A")
-    fig.tight_layout()
-    return fig
-
-def token_representation_scores(hidden_state, tokens):
-    values = hidden_state[0].norm(dim=-1).detach().cpu().numpy()
-    values = values / (values.sum() + 1e-12)
-    return values, tokens
-
-# ==========================================
-# SIDEBAR UI
-# ==========================================
-st.sidebar.header("Explorer")
-section = st.sidebar.radio(
-    "Choose a section",
-    [
-        "Text Attention Heatmap",
-        "Token Representation Scores",
-        "Image Attention using ViT",
-        "PyTorch Hooks",
-        "Bias Testing"
-    ]
+# --- Sidebar Configuration ---
+st.sidebar.title("⚙️ Configuration")
+st.sidebar.markdown("### HW 33: Attention Mechanisms")
+model_type = st.sidebar.selectbox(
+    "Choose Model Type",
+    ["BERT (Text)", "GPT-2 (Text)", "Vision Transformer (ViT - Image)"]
 )
 
-# ==========================================
-# MAIN PAGE UI
-# ==========================================
-st.markdown("""
-    <div style='text-align: center; padding: 2rem 0 2rem 0;'>
-        <h1 style='font-size: 3.5rem; font-weight: 800; color: #B22222; margin-bottom: 0.5rem;'>
-            Attention Heatmap Explorer
-        </h1>
-        <p style='font-size: 1.2rem; color: #4D4D4D; font-weight: 500; max-width: 800px; margin: 0 auto; line-height: 1.6;'>
-            Explore transformer attention for text and images, inspect token representation scores, and test simple pronoun–occupation examples.
-        </p>
-    </div>
-""", unsafe_allow_html=True)
-st.write("---")
+st.sidebar.markdown("---")
+st.sidebar.info("Repository: [shreyashjiwade/attention-heatmap-explorer](https://github.com/shreyashjiwade/attention-heatmap-explorer)")
+
+# --- Main App Title ---
+st.title("🔍 Attention Heatmap Explorer (HW 33)")
+st.markdown("A comprehensive Streamlit application to visualize attention weights and token/patch interactions for Transformer models.")
 
 # ==========================================
-# TEXT / TOKEN / HOOKS SECTIONS
+# 1. BERT / GPT-2 TEXT EXPLORER
 # ==========================================
-if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch Hooks"]:
-    model_choice = st.sidebar.selectbox("Select Transformer Model", ["BERT", "GPT-2"])
+if "Text" in model_type:
+    model_name = "bert-base-uncased" if "BERT" in model_type else "gpt2"
     
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        default_text = "The doctor told the nurse that she should help the patient."
-        text_input = st.text_area("✍️ Enter a sentence", default_text)
-    with col2:
-        st.write("") 
-        st.write("")
-        generate_btn = st.button("🚀 Generate", type="primary", use_container_width=True)
+    @st.cache_resource
+    def load_text_model(name):
+        tokenizer = AutoTokenizer.from_pretrained(name)
+        model = AutoModel.from_pretrained(name, output_attentions=True)
+        model.eval()
+        return tokenizer, model
 
-    if generate_btn:
-        if not text_input.strip():
-            st.warning("Please enter a sentence.")
+    with st.spinner(f"Loading {model_name} model and tokenizer..."):
+        tokenizer, model = load_text_model(model_name)
+
+    user_input = st.text_area("Enter input text for analysis:", "The quick brown fox jumps over the lazy dog.")
+
+    if st.button("Generate Attention Heatmap"):
+        if user_input.strip() == "":
+            st.warning("Please enter valid text input.")
         else:
-            with st.spinner("Loading model and generating outputs..."):
-                if model_choice == "BERT":
-                    tokenizer, model = load_bert()
-                    encoded = tokenizer(text_input, return_tensors="pt", truncation=True, max_length=32).to(DEVICE)
-                    with torch.no_grad():
-                        output = model(**encoded)
-                    tokens = tokenizer.convert_ids_to_tokens(encoded["input_ids"][0].detach().cpu().tolist())
-                    final_attention = output.attentions[-1]
-                    final_hidden = output.last_hidden_state
-                    hook_layer = model.encoder.layer[-1]
-                else:
-                    tokenizer, model = load_gpt2()
-                    encoded = tokenizer(text_input, return_tensors="pt", truncation=True, max_length=32).to(DEVICE)
-                    with torch.no_grad():
-                        output = model(**encoded)
-                    tokens = tokenizer.convert_ids_to_tokens(encoded["input_ids"][0].detach().cpu().tolist())
-                    final_attention = output.attentions[-1]
-                    final_hidden = output.last_hidden_state
-                    hook_layer = model.h[-1]
-
-                st.session_state["tokens"] = tokens
-                st.session_state["attention"] = final_attention.detach().cpu()
-                st.session_state["hidden"] = final_hidden.detach().cpu()
-                st.session_state["model_choice"] = model_choice
-
-                # --- 1. Text Attention Heatmap ---
-                if section == "Text Attention Heatmap":
-                    fig = plot_attention(final_attention, tokens, f"{model_choice} Attention Heatmap")
-                    st.pyplot(fig)
-                    st.download_button("Download Text Heatmap as PNG", data=_figure_png(fig), file_name=f"{model_choice.lower()}_attention_heatmap.png", mime="image/png")
-                
-                # --- 2. Token Representation Scores ---
-                elif section == "Token Representation Scores":
-                    scores, token_list = token_representation_scores(final_hidden, tokens)
-                    st.subheader("Token Representation Scores")
-                    st.dataframe([{"Token": t, "Representation Score": round(float(s), 4)} for t, s in zip(token_list, scores)], use_container_width=True)
-                    st.caption("These scores are representation proxies, not true next-token probabilities.")
-                    
-                    fig, ax = plt.subplots(figsize=(10, 4))
-                    fig.patch.set_alpha(0.0)
-                    ax.patch.set_alpha(0.0)
-                    bg_matrix = final_attention[0].mean(dim=0).detach().cpu().numpy()
-                    n = len(token_list)
-                    bg_matrix = bg_matrix[:n, :n]
-                    
-                    ax.imshow(bg_matrix, cmap='YlGnBu', aspect='auto', zorder=1, alpha=0.3, interpolation='bicubic')
-                    ax.bar(token_list, scores, color='#008080', zorder=2, edgecolor='#004C4C', linewidth=1)
-                    
-                    ax.spines['top'].set_visible(False)
-                    ax.spines['right'].set_visible(False)
-                    ax.spines['left'].set_color('#8C8C8C')
-                    ax.spines['bottom'].set_color('#8C8C8C')
-                    ax.grid(axis='y', linestyle='--', alpha=0.5, zorder=0, color='#CCCCCC')
-                    
-                    ax.set_ylabel("Representation Score", color="#333333", fontsize=10)
-                    ax.tick_params(axis="x", rotation=45, colors="#1A1A1A")
-                    ax.tick_params(axis="y", colors="#1A1A1A")
-                    fig.tight_layout()
-                    st.pyplot(fig)
-                
-                # --- 3. PyTorch Hooks ---
-                else:
-                    captured = {}
-                    def save_output(module, inputs, output):
-                        captured["value"] = output[0] if isinstance(output, tuple) else output
-
-                    handle = hook_layer.register_forward_hook(save_output)
-                    try:
-                        with torch.no_grad():
-                            _ = model(**encoded)
-                    finally:
-                        handle.remove()
-
-                    if "value" in captured:
-                        tensor = captured["value"].detach().cpu()
-                        st.success("PyTorch Hook captured layer output successfully!")
-                        st.write("Captured Layer Output Shape:", tuple(tensor.shape))
-                        st.dataframe(tensor[0, :10, :10].numpy(), use_container_width=True)
-                    else:
-                        st.error("The hook did not capture an output.")
-
-# ==========================================
-# ViT IMAGE SECTION
-# ==========================================
-elif section == "Image Attention using ViT":
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        uploaded = st.file_uploader("Upload an image", type=["png", "jpg", "jpeg"])
-        if uploaded is not None:
-            image = Image.open(uploaded).convert("RGB")
-            st.image(image, caption="Uploaded image", use_container_width=True)
-            
-    with col2:
-        if uploaded is not None:
-            if st.button("🚀 Generate Image Attention Heatmap", type="primary", use_container_width=True):
-                with st.spinner("Generating ViT attention..."):
-                    processor, model = load_vit()
-                    inputs = processor(images=image, return_tensors="pt").to(DEVICE)
-                    with torch.no_grad():
-                        output = model(**inputs)
-                    
-                    attn = output.attentions[-1][0].mean(dim=0)
-                    cls_attention = attn[0, 1:].detach().cpu().numpy()
-                    side = int(np.sqrt(len(cls_attention)))
-                    grid = cls_attention[:side * side].reshape(side, side)
-                    grid = (grid - grid.min()) / (grid.max() - grid.min() + 1e-12)
-                    
-                    resized = Image.fromarray(np.uint8(grid * 255)).resize(image.size)
-                    heat = np.array(resized) / 255.0
-                    
-                    fig, ax = plt.subplots(figsize=(8, 6))
-                    fig.patch.set_alpha(0.0)
-                    ax.patch.set_alpha(0.0)
-                    
-                    ax.imshow(image)
-                    ax.imshow(heat, cmap="jet", alpha=0.45)
-                    ax.set_title("ViT Image Attention Heatmap", color="#1A1A1A", fontweight='bold')
-                    ax.axis("off")
-                    fig.tight_layout()
-                    
-                    st.pyplot(fig)
-                    st.download_button("Download Image Heatmap as PNG", data=_figure_png(fig), file_name="vit_image_attention_heatmap.png", mime="image/png")
-
-# ==========================================
-# BIAS TESTING SECTION
-# ==========================================
-elif section == "Bias Testing":
-    st.subheader("Pronoun-to-Occupation Attention Comparison")
-    st.write("This is a small exploratory comparison, not a definitive measure of model bias.")
-    examples = [
-        "The doctor told the nurse that she should help the patient.",
-        "The doctor told the nurse that he should help the patient."
-    ]
-    if st.button("🚀 Run Bias Test", type="primary"):
-        with st.spinner("Analyzing bias..."):
-            tokenizer, model = load_bert()
-            values = []
-            details = []
+            inputs = tokenizer(user_input, return_tensors="pt")
             with torch.no_grad():
-                for sentence in examples:
-                    encoded = tokenizer(sentence, return_tensors="pt").to(DEVICE)
-                    output = model(**encoded)
-                    tokens = tokenizer.convert_ids_to_tokens(encoded["input_ids"][0].cpu().tolist())
-                    attention = output.attentions[-1][0].mean(dim=0).cpu().numpy()
-                    pronoun_indices = [i for i, token in enumerate(tokens) if token.lower() in ["she", "he"]]
-                    occupation_indices = [i for i, token in enumerate(tokens) if token.lower() in ["doctor", "nurse"]]
-                    if pronoun_indices and occupation_indices:
-                        score = float(attention[pronoun_indices[0], occupation_indices].mean())
-                    else:
-                        score = 0.0
-                    values.append(score)
-                    details.append((sentence, score, tokens))
+                outputs = model(**inputs)
             
-            fig, ax = plt.subplots(figsize=(8, 4))
-            fig.patch.set_alpha(0.0)
-            ax.patch.set_alpha(0.0)
+            attentions = outputs.attentions # Tuple of layers: (batch, heads, seq_len, seq_len)
+            tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
             
-            ax.bar(["Sentence 1 (she)", "Sentence 2 (he)"], values, color=['#B22222', '#008080'])
-            ax.set_title("Pronoun-to-Occupation Attention Comparison", color="#1A1A1A", fontweight='bold')
-            ax.set_ylabel("Attention Weight", color="#333333")
-            ax.tick_params(colors="#1A1A1A")
+            st.success("Attention weights computed successfully!")
             
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            ax.spines['left'].set
+            # Layer & Head selection
+            layer_idx = st.slider("Select Layer", 0, len(attentions)-1, len(attentions)-1)
+            layer_attention = attentions[layer_idx][0].mean(dim=0).cpu().numpy() # Average across heads
+            
+            # Plot Heatmap
+            fig, ax = plt.subplots(figsize=(10, 8))
+            sns.heatmap(layer_attention, xticklabels=tokens, yticklabels=tokens, cmap="Blues", ax=ax, cbar=True, linewidths=0.5)
+            plt.xticks(rotation=45, ha='right', fontsize=10)
+            plt.yticks(rotation=0, fontsize=10)
+            ax.set_title(f"Attention Heatmap for Layer {layer_idx} ({model_name})", fontsize=12, fontweight='bold')
+            st.pyplot(fig)
+
+# ==========================================
+# 2. VISION TRANSFORMER (ViT) EXPLORER
+# ==========================================
+else:
+    @st.cache_resource
+    def load_vit_model():
+        processor = ViTImageProcessor.from_pretrained("google/vit-base-patch16-224")
+        model = ViTForImageClassification.from_pretrained("google/vit-base-patch16-224", output_attentions=True)
+        model.eval()
+        return processor, model
+
+    with st.spinner("Loading Vision Transformer (ViT)..."):
+        processor, model = load_vit_model()
+
+    uploaded_file = st.file_uploader("Upload an image (PNG, JPG, JPEG)", type=["jpg", "jpeg", "png"])
+
+    if uploaded_file is not None:
+        image = Image.open(uploaded_file).convert("RGB")
+        st.image(image, caption="Uploaded Image for Analysis", width=350)
+
+        if st.button("Generate ViT Attention Map"):
+            inputs = processor(images=image, return_tensors="pt")
+            with torch.no_grad():
+                outputs = model(**inputs)
+            
+            attentions = outputs.attentions # Layers tuple
+            # Get last layer attention map for the [CLS] token across patches
+            cls_attention = attentions[-1][0, :, 0, 1:].mean(dim=0) # Average across heads
+            
+            # Reshape to grid (e.g., 14x14 for patch size 16 on 224x224 image)
+            grid_size = int(np.sqrt(cls_attention.shape[0]))
+            attention_map = cls_attention.reshape(grid_size, grid_size).cpu().numpy()
+            
+            # Normalize map
+            attention_map = (attention_map - attention_map.min()) / (attention_map.max() - attention_map.min())
+
+            fig, ax = plt.subplots(figsize=(6, 6))
+            ax.imshow(image.resize((224, 224)))
+            ax.imshow(attention_map, cmap='jet', alpha=0.6, extent=(0, 224, 224, 0))
+            ax.axis('off')
+            ax.set_title("ViT [CLS] Token Attention Overlay", fontsize=12, fontweight='bold')
+            st.pyplot(fig)
+            st.success("ViT Attention overlay generated successfully!")
+    else:
+        st.info("Please upload an image to analyze Vision Transformer attention.")
