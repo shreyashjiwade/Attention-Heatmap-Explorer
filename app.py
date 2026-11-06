@@ -10,6 +10,9 @@ from transformers import (
     ViTImageProcessor, ViTModel
 )
 
+# Matplotlib la dark theme la set kela (app chya navin background sobat match honyasathi)
+plt.style.use('dark_background')
+
 # ==========================================
 # PAGE CONFIGURATION 
 # ==========================================
@@ -18,6 +21,35 @@ st.set_page_config(
     page_icon="✨",
     layout="wide"
 )
+
+# ==========================================
+# CUSTOM DARK THEME CSS (Premium App-like)
+# ==========================================
+st.markdown("""
+<style>
+    /* Main App Background Gradient */
+    .stApp {
+        background-color: #0A0F1D;
+        background-image: radial-gradient(circle at top, #141F36 0%, #0A0F1D 100%);
+        color: #E2E8F0;
+    }
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {
+        background-color: #0B101E;
+        border-right: 1px solid #1E293B;
+    }
+    /* Transparent header */
+    [data-testid="stHeader"] {
+        background-color: rgba(0,0,0,0);
+    }
+    /* Text input styling */
+    .stTextArea textarea {
+        background-color: #111827 !important;
+        color: white !important;
+        border: 1px solid #334155 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -59,6 +91,11 @@ def plot_attention(attention, tokens, title):
     matrix = attention[0].mean(dim=0).detach().cpu().numpy()
     n = min(len(tokens), matrix.shape[0], 32)
     fig, ax = plt.subplots(figsize=(max(7, n * 0.55), max(5, n * 0.45)))
+    
+    # Figure background transparent kela
+    fig.patch.set_alpha(0.0)
+    ax.patch.set_alpha(0.0)
+    
     sns.heatmap(
         matrix[:n, :n],
         xticklabels=tokens[:n],
@@ -66,11 +103,11 @@ def plot_attention(attention, tokens, title):
         cmap="viridis",
         ax=ax
     )
-    ax.set_title(title)
-    ax.set_xlabel("Key Tokens")
-    ax.set_ylabel("Query Tokens")
-    plt.xticks(rotation=45, ha="right")
-    plt.yticks(rotation=0)
+    ax.set_title(title, color="white")
+    ax.set_xlabel("Key Tokens", color="#A0AEC0")
+    ax.set_ylabel("Query Tokens", color="#A0AEC0")
+    plt.xticks(rotation=45, ha="right", color="#E2E8F0")
+    plt.yticks(rotation=0, color="#E2E8F0")
     fig.tight_layout()
     return fig
 
@@ -99,10 +136,10 @@ section = st.sidebar.radio(
 # ==========================================
 st.markdown("""
     <div style='text-align: center; padding: 2rem 0 2rem 0;'>
-        <h1 style='font-size: 3.5rem; font-weight: 800; background: -webkit-linear-gradient(45deg, #FF4B4B, #7353BA); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.5rem;'>
+        <h1 style='font-size: 3.5rem; font-weight: 800; background: -webkit-linear-gradient(45deg, #60A5FA, #A78BFA); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.5rem;'>
             Attention Heatmap Explorer
         </h1>
-        <p style='font-size: 1.2rem; color: #555555; font-weight: 400; max-width: 800px; margin: 0 auto; line-height: 1.6;'>
+        <p style='font-size: 1.2rem; color: #94A3B8; font-weight: 400; max-width: 800px; margin: 0 auto; line-height: 1.6;'>
             Explore transformer attention for text and images, inspect token representation scores, and test simple pronoun–occupation examples.
         </p>
     </div>
@@ -115,8 +152,6 @@ st.write("---")
 if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch Hooks"]:
     model_choice = st.sidebar.selectbox("Select Transformer Model", ["BERT", "GPT-2"])
     
-    # ⚠️ Blue tip line kadhun takli ahe!
-
     col1, col2 = st.columns([4, 1])
     
     with col1:
@@ -178,7 +213,7 @@ if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch
                         mime="image/png"
                     )
                 
-                # --- 2. Token Representation Scores (MODERN APP UI) ---
+                # --- 2. Token Representation Scores (MODERN DARK UI) ---
                 elif section == "Token Representation Scores":
                     scores, token_list = token_representation_scores(final_hidden, tokens)
                     st.subheader("Token Representation Scores")
@@ -191,27 +226,29 @@ if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch
                     st.caption("These scores are representation proxies, not true next-token probabilities.")
                     
                     fig, ax = plt.subplots(figsize=(10, 4))
+                    fig.patch.set_alpha(0.0) # Transparent background
+                    ax.patch.set_alpha(0.0)
                     
                     bg_matrix = final_attention[0].mean(dim=0).detach().cpu().numpy()
                     n = len(token_list)
                     bg_matrix = bg_matrix[:n, :n]
                     
-                    # Premium App-like blur background
-                    ax.imshow(bg_matrix, cmap='YlOrRd', aspect='auto', zorder=1, alpha=0.6, interpolation='bicubic')
+                    # Glowing blur background matched for dark mode
+                    ax.imshow(bg_matrix, cmap='magma', aspect='auto', zorder=1, alpha=0.6, interpolation='bicubic')
                     
-                    # Modern bars with white edge
-                    ax.bar(token_list, scores, color='#FF4B4B', zorder=2, edgecolor='white', linewidth=1.5, alpha=0.9)
+                    # Modern bars with neon edge
+                    ax.bar(token_list, scores, color='#60A5FA', zorder=2, edgecolor='#93C5FD', linewidth=1.5, alpha=0.9)
                     
-                    # Clean borders
+                    # Clean borders for dark mode
                     ax.spines['top'].set_visible(False)
                     ax.spines['right'].set_visible(False)
-                    ax.spines['left'].set_color('#dddddd')
-                    ax.spines['bottom'].set_color('#dddddd')
-                    ax.grid(axis='y', linestyle='--', alpha=0.4, zorder=0)
+                    ax.spines['left'].set_color('#334155')
+                    ax.spines['bottom'].set_color('#334155')
+                    ax.grid(axis='y', linestyle='--', alpha=0.2, zorder=0, color='#94A3B8')
                     
-                    ax.set_ylabel("Representation Score", color="#555555", fontsize=10)
-                    ax.tick_params(axis="x", rotation=45, colors="#333333")
-                    ax.tick_params(axis="y", colors="#333333")
+                    ax.set_ylabel("Representation Score", color="#94A3B8", fontsize=10)
+                    ax.tick_params(axis="x", rotation=45, colors="#CBD5E1")
+                    ax.tick_params(axis="y", colors="#CBD5E1")
                     
                     fig.tight_layout()
                     st.pyplot(fig)
@@ -270,9 +307,12 @@ elif section == "Image Attention using ViT":
                     heat = np.array(resized) / 255.0
                     
                     fig, ax = plt.subplots(figsize=(8, 6))
+                    fig.patch.set_alpha(0.0)
+                    ax.patch.set_alpha(0.0)
+                    
                     ax.imshow(image)
-                    ax.imshow(heat, cmap="jet", alpha=0.45)
-                    ax.set_title("ViT Image Attention Heatmap")
+                    ax.imshow(heat, cmap="magma", alpha=0.45)
+                    ax.set_title("ViT Image Attention Heatmap", color="white")
                     ax.axis("off")
                     fig.tight_layout()
                     
@@ -321,9 +361,20 @@ elif section == "Bias Testing":
                     details.append((sentence, score, tokens))
             
             fig, ax = plt.subplots(figsize=(8, 4))
-            ax.bar(["Sentence 1 (she)", "Sentence 2 (he)"], values, color=['#FF4B4B', '#0055ff'])
-            ax.set_title("Pronoun-to-Occupation Attention Comparison")
-            ax.set_ylabel("Attention Weight")
+            fig.patch.set_alpha(0.0)
+            ax.patch.set_alpha(0.0)
+            
+            ax.bar(["Sentence 1 (she)", "Sentence 2 (he)"], values, color=['#A78BFA', '#60A5FA'])
+            ax.set_title("Pronoun-to-Occupation Attention Comparison", color="white")
+            ax.set_ylabel("Attention Weight", color="#A0AEC0")
+            ax.tick_params(colors="#E2E8F0")
+            
+            # Clean borders
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['left'].set_color('#334155')
+            ax.spines['bottom'].set_color('#334155')
+            
             fig.tight_layout()
             st.pyplot(fig)
             
