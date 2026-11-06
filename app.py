@@ -11,7 +11,7 @@ from transformers import (
 )
 
 # ==========================================
-# PAGE CONFIGURATION 
+# 1. PAGE CONFIGURATION 
 # ==========================================
 st.set_page_config(
     page_title="Attention Heatmap Explorer", 
@@ -19,8 +19,10 @@ st.set_page_config(
     layout="wide"
 )
 
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 # ==========================================
-# SAFE & 100% READABLE CREAM/WARM GRAY CSS
+# 2. STYLING & CSS
 # ==========================================
 st.markdown("""
 <style>
@@ -52,10 +54,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 # ==========================================
-# CACHED FUNCTIONS
+# 3. CACHED MODEL LOADERS & HELPER FUNCTIONS
 # ==========================================
 @st.cache_resource
 def load_bert():
@@ -106,7 +106,7 @@ def token_representation_scores(hidden_state, tokens):
     return values, tokens
 
 # ==========================================
-# SIDEBAR UI
+# 4. SIDEBAR & MAIN NAVIGATION
 # ==========================================
 st.sidebar.header("Explorer")
 section = st.sidebar.radio(
@@ -120,15 +120,13 @@ section = st.sidebar.radio(
     ]
 )
 
-# ==========================================
-# MAIN PAGE UI
-# ==========================================
+# Header Title
 st.markdown("""
-    <div style='text-align: center; padding: 2rem 0 2rem 0;'>
-        <h1 style='font-size: 3.5rem; font-weight: 800; color: #B22222; margin-bottom: 0.5rem;'>
+    <div style='text-align: center; padding: 1rem 0 1rem 0;'>
+        <h1 style='font-size: 3rem; font-weight: 800; color: #B22222; margin-bottom: 0.5rem;'>
             Attention Heatmap Explorer
         </h1>
-        <p style='font-size: 1.2rem; color: #4D4D4D; font-weight: 500; max-width: 800px; margin: 0 auto; line-height: 1.6;'>
+        <p style='font-size: 1.1rem; color: #4D4D4D; font-weight: 500; max-width: 800px; margin: 0 auto; line-height: 1.6;'>
             Explore transformer attention for text and images, inspect token representation scores, and test simple pronoun–occupation examples.
         </p>
     </div>
@@ -136,8 +134,9 @@ st.markdown("""
 st.write("---")
 
 # ==========================================
-# TEXT / TOKEN / HOOKS SECTIONS
+# 5. SECTION HANDLERS
 # ==========================================
+
 if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch Hooks"]:
     model_choice = st.sidebar.selectbox("Select Transformer Model", ["BERT", "GPT-2"])
     
@@ -179,13 +178,13 @@ if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch
                 st.session_state["hidden"] = final_hidden.detach().cpu()
                 st.session_state["model_choice"] = model_choice
 
-                # --- 1. Text Attention Heatmap ---
+                # --- Section 1: Text Attention Heatmap ---
                 if section == "Text Attention Heatmap":
                     fig = plot_attention(final_attention, tokens, f"{model_choice} Attention Heatmap")
                     st.pyplot(fig)
                     st.download_button("Download Text Heatmap as PNG", data=_figure_png(fig), file_name=f"{model_choice.lower()}_attention_heatmap.png", mime="image/png")
                 
-                # --- 2. Token Representation Scores ---
+                # --- Section 2: Token Representation Scores ---
                 elif section == "Token Representation Scores":
                     scores, token_list = token_representation_scores(final_hidden, tokens)
                     st.subheader("Token Representation Scores")
@@ -214,8 +213,8 @@ if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch
                     fig.tight_layout()
                     st.pyplot(fig)
                 
-                # --- 3. PyTorch Hooks ---
-                else:
+                # --- Section 3: PyTorch Hooks ---
+                elif section == "PyTorch Hooks":
                     captured = {}
                     def save_output(module, inputs, output):
                         captured["value"] = output[0] if isinstance(output, tuple) else output
@@ -235,9 +234,6 @@ if section in ["Text Attention Heatmap", "Token Representation Scores", "PyTorch
                     else:
                         st.error("The hook did not capture an output.")
 
-# ==========================================
-# ViT IMAGE SECTION
-# ==========================================
 elif section == "Image Attention using ViT":
     col1, col2 = st.columns([1, 2])
     with col1:
@@ -277,9 +273,6 @@ elif section == "Image Attention using ViT":
                     st.pyplot(fig)
                     st.download_button("Download Image Heatmap as PNG", data=_figure_png(fig), file_name="vit_image_attention_heatmap.png", mime="image/png")
 
-# ==========================================
-# BIAS TESTING SECTION
-# ==========================================
 elif section == "Bias Testing":
     st.subheader("Pronoun-to-Occupation Attention Comparison")
     st.write("This is a small exploratory comparison, not a definitive measure of model bias.")
@@ -290,7 +283,7 @@ elif section == "Bias Testing":
     if st.button("🚀 Run Bias Test", type="primary"):
         with st.spinner("Analyzing bias..."):
             tokenizer, model = load_bert()
-            values = []
+            scores_list = []
             details = []
             with torch.no_grad():
                 for sentence in examples:
@@ -304,14 +297,14 @@ elif section == "Bias Testing":
                         score = float(attention[pronoun_indices[0], occupation_indices].mean())
                     else:
                         score = 0.0
-                    values.append(score)
+                    scores_list.append(score)
                     details.append((sentence, score, tokens))
             
             fig, ax = plt.subplots(figsize=(8, 4))
             fig.patch.set_alpha(0.0)
             ax.patch.set_alpha(0.0)
             
-            ax.bar(["Sentence 1 (she)", "Sentence 2 (he)"], values, color=['#B22222', '#008080'])
+            ax.bar(["Sentence 1 (she)", "Sentence 2 (he)"], scores_list, color=['#B22222', '#008080'])
             ax.set_title("Pronoun-to-Occupation Attention Comparison", color="#1A1A1A", fontweight='bold')
             ax.set_ylabel("Attention Weight", color="#333333")
             ax.tick_params(colors="#1A1A1A")
